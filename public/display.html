@@ -101,4 +101,69 @@
                         (x >= 28 && x <= 42 && y >= 8 && y <= 11) || // ขีดกลาง
                         (x >= 28 && x <= 42 && y >= 16 && y <= 19) || // ขีดล่าง
                         (x >= 28 && x <= 31 && y >= 4 && y <= 8) ||   // มุมซ้ายบน
-                        (x >=
+                        (x >= 39 && x <= 42 && y >= 11 && y <= 16)    // มุมขวาล่าง
+                    ) isLetter = 1;
+
+                    row.push(isLetter);
+                }
+                pattern.push(row);
+            }
+            return pattern;
+        }
+
+        // สร้าง Grid 900 ช่อง
+        function createGrid() {
+            const pattern = getAISPattern();
+            
+            pattern.forEach((row, rowIndex) => {
+                row.forEach((cell, colIndex) => {
+                    const div = document.createElement('div');
+                    div.classList.add('pixel');
+                    
+                    // ใส่ data-index ไว้เช็คตำแหน่งเผื่ออนาคต
+                    div.dataset.x = colIndex;
+                    div.dataset.y = rowIndex;
+
+                    if(cell === 1) {
+                        div.classList.add('active');
+                        activePixels.push(div);
+                    }
+                    container.appendChild(div);
+                });
+            });
+            console.log(`Grid created. Active pixels for AIS: ${activePixels.length}`);
+        }
+
+        function placeImage(url) {
+            if (activePixels.length === 0) return;
+
+            const targetPixel = activePixels[currentImageIndex];
+            
+            const img = document.createElement('img');
+            img.src = url;
+            
+            // เพิ่ม class เพื่อให้ CSS รู้ว่าช่องนี้มีรูปแล้ว (ปรับ Opacity เต็ม)
+            targetPixel.classList.add('has-image');
+            targetPixel.innerHTML = ''; 
+            targetPixel.appendChild(img);
+
+            // วนลูป Index
+            currentImageIndex = (currentImageIndex + 1) % activePixels.length;
+        }
+
+        createGrid();
+
+        socket.on('initImages', (images) => {
+            // ถ้ามีรูปเยอะมากๆ ให้ทยอยโหลดเพื่อความสวยงาม
+            images.forEach((imgUrl, i) => {
+                setTimeout(() => placeImage(imgUrl), i * 10); // ดีเลย์นิดๆ ให้เห็นเอฟเฟกต์วิ่ง
+            });
+        });
+
+        socket.on('newImage', (imgUrl) => {
+            placeImage(imgUrl);
+        });
+
+    </script>
+</body>
+</html>

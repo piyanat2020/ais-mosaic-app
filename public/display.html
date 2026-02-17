@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <title>AIS Display</title>
+    <style>
+        body { background-color: #000; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; }
+        
+        /* Grid ขนาด 20x10 ช่อง */
+        #grid-container {
+            display: grid;
+            grid-template-columns: repeat(20, 1fr); /* 20 คอลัมน์ */
+            grid-template-rows: repeat(10, 1fr);    /* 10 แถว */
+            gap: 5px;
+            width: 90vw;
+            height: 80vh;
+        }
+
+        .pixel {
+            background-color: #222; /* สีพื้นหลังช่องว่าง */
+            border-radius: 4px;
+            overflow: hidden;
+            opacity: 0.3; /* จางๆ ถ้ายังไม่มีรูป */
+            transition: opacity 0.5s;
+        }
+
+        /* Class สำหรับช่องที่เป็นตัวอักษร */
+        .pixel.active {
+            background-color: #444;
+            opacity: 1;
+        }
+
+        .pixel img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            animation: fadeIn 0.5s ease-in;
+        }
+
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+    </style>
+</head>
+<body>
+
+    <div id="grid-container"></div>
+
+    <script src="/socket.io/socket.io.js"></script>
+    <script>
+        const socket = io();
+        const container = document.getElementById('grid-container');
+        let activePixels = []; // เก็บ Element ของช่องที่เป็นตัวอักษร
+        let currentImageIndex = 0; // ตัวนับว่ารูปถัดไปจะลงช่องไหน
+
+        // สร้างแผนที่ตัวอักษร AIS (1 = มีตัวอักษร, 0 = ว่าง)
+        // ออกแบบใน Grid 20 คอลัมน์ x 10 แถว
+        const aisPattern = [
+            [0,0,0,0,0, 0,0,0,0,0, 0,0,0,0,0, 0,0,0,0,0], // แถว 0
+            [0,0,1,1,1, 0,0,1,1,1, 0,0,0,1,1, 1,1,1,0,0], // แถว 1 (หัว A, I, S)
+            [0,1,0,0,0, 1,0,0,1,0, 0,0,1,0,0, 0,0,0,1,0], // แถว 2
+            [0,1,0,0,0, 1,0,0,1,0, 0,0,1,0,0, 0,0,0,0,0], // แถว 3
+            [0,1,0,0,0, 1,0,0,1,0, 0,0,0,1,1, 1,1,1,0,0], // แถว 4 (S กลาง)
+            [0,1,1,1,1, 1,0,0,1,0, 0,0,0,0,0, 0,0,0,1,0], // แถว 5 (ขีดกลาง A)
+            [0,1,0,0,0, 1,0,0,1,0, 0,0,0,0,0, 0,0,0,1,0], // แถว 6
+            [0,1,0,0,0, 1,0,0,1,0, 0,0,1,0,0, 0,0,0,1,0], // แถว 7
+            [0,1,0,0,0, 1,0,1,1,1, 0,0,0,1,1, 1,1,1,0,0], // แถว 8 (ฐาน)
+            [0,0,0,0,0, 0,0,0,0,0, 0,0,0,0,0, 0,0,0,0,0], // แถว 9
+        ];
+
+        // สร้าง Grid บนหน้าจอ
+        function createGrid() {
+            aisPattern.forEach((row, rowIndex) => {
+                row.forEach((cell, colIndex) => {
+                    const div = document.createElement('div');
+                    div.classList.add('pixel');
+                    
+                    // ถ้าใน Pattern เป็นเลข 1 ให้ถือว่าเป็นส่วนของตัวอักษร
+                    if(cell === 1) {
+                        div.classList.add('active');
+                        activePixels.push(div); // เก็บเข้า List ไว้ใส่รูป
+                    }
+                    container.appendChild(div);
+                });
+            });
+        }
+
+        // ฟังก์ชันเอารูปใส่ลงในช่อง Grid
+        function placeImage(url) {
+            if (activePixels.length === 0) return;
+
+            // เลือกช่องถัดไป (วนลูปถ้าเต็มแล้ว)
+            const targetPixel = activePixels[currentImageIndex];
+            
+            // สร้าง element รูปภาพ
+            const img = document.createElement('img');
+            img.src = url;
+            
+            // ล้างรูปเก่า (ถ้ามี) แล้วใส่รูปใหม่
+            targetPixel.innerHTML = '';
+            targetPixel.appendChild(img);
+
+            // ขยับ index ไปช่องถัดไป ถ้าเกินจำนวนช่อง ให้กลับไปเริ่ม 0 ใหม่
+            currentImageIndex = (currentImageIndex + 1) % activePixels.length;
+        }
+
+        // เริ่มต้นสร้าง Grid
+        createGrid();
+
+        // Socket Events
+        // 1. โหลดรูปเก่าที่มีอยู่แล้วตอนเปิดหน้าเว็บ
+        socket.on('initImages', (images) => {
+            images.forEach(imgUrl => placeImage(imgUrl));
+        });
+
+        // 2. รับรูปใหม่แบบ Real-time
+        socket.on('newImage', (imgUrl) => {
+            placeImage(imgUrl);
+        });
+
+    </script>
+</body>
+</html>

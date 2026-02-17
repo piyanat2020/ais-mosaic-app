@@ -48,6 +48,6 @@ io.on('connection', (socket) => {
     // ส่งรายการรูปภาพที่มีอยู่แล้วทั้งหมดไปให้คนที่เพิ่งเข้ามา
     socket.emit('initImages', imageList);
 });
-
+//ok
 const PORT = 3000;
 server.listen(PORT, () => console.log(`Server running on port ${PORT}`));

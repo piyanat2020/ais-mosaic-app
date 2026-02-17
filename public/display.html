@@ -2,42 +2,62 @@
 <html lang="th">
 <head>
     <meta charset="UTF-8">
-    <title>AIS Display</title>
+    <title>AIS Display 900 Pixels</title>
     <style>
-        body { background-color: #000; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; }
+        body { 
+            background-color: #000; 
+            display: flex; 
+            justify-content: center; 
+            align-items: center; 
+            height: 100vh; 
+            margin: 0; 
+            overflow: hidden; /* ป้องกัน Scrollbar */
+        }
         
-        /* Grid ขนาด 20x10 ช่อง */
+        /* Grid ขนาด 45x20 = 900 ช่อง */
         #grid-container {
             display: grid;
-            grid-template-columns: repeat(20, 1fr); /* 20 คอลัมน์ */
-            grid-template-rows: repeat(10, 1fr);    /* 10 แถว */
-            gap: 5px;
-            width: 90vw;
-            height: 80vh;
+            grid-template-columns: repeat(45, 1fr); /* 45 คอลัมน์ */
+            grid-template-rows: repeat(20, 1fr);    /* 20 แถว */
+            gap: 2px; /* ช่องว่างเล็กลงเพื่อให้ดูเนียนขึ้น */
+            width: 95vw;
+            height: 90vh;
         }
 
         .pixel {
-            background-color: #222; /* สีพื้นหลังช่องว่าง */
-            border-radius: 4px;
+            background-color: #1a1a1a;
+            border-radius: 2px;
             overflow: hidden;
-            opacity: 0.3; /* จางๆ ถ้ายังไม่มีรูป */
-            transition: opacity 0.5s;
+            opacity: 0.15; /* จางมากถ้าไม่ใช่ตัวอักษร */
+            transition: all 0.5s;
+            position: relative;
         }
 
-        /* Class สำหรับช่องที่เป็นตัวอักษร */
+        /* Class สำหรับช่องที่เป็นตัวอักษร AIS */
         .pixel.active {
-            background-color: #444;
-            opacity: 1;
+            background-color: #333;
+            opacity: 0.4; /* สว่างขึ้นมารอนูป */
+            box-shadow: 0 0 5px rgba(135, 192, 66, 0.2); /* เรืองแสงสีเขียว AIS นิดๆ */
+        }
+
+        /* เมื่อมีรูปภาพใส่เข้ามา */
+        .pixel.has-image {
+            opacity: 1 !important;
+            background-color: black;
         }
 
         .pixel img {
             width: 100%;
             height: 100%;
-            object-fit: cover;
-            animation: fadeIn 0.5s ease-in;
+            object-fit: cover; /* ตัดส่วนเกินออกให้รูปเต็มช่อง */
+            display: block;
+            animation: popIn 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
         }
 
-        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+        @keyframes popIn { 
+            from { transform: scale(0); } 
+            to { transform: scale(1); } 
+        }
     </style>
 </head>
 <body>
@@ -48,74 +68,37 @@
     <script>
         const socket = io();
         const container = document.getElementById('grid-container');
-        let activePixels = []; // เก็บ Element ของช่องที่เป็นตัวอักษร
-        let currentImageIndex = 0; // ตัวนับว่ารูปถัดไปจะลงช่องไหน
+        let activePixels = []; 
+        let currentImageIndex = 0;
 
-        // สร้างแผนที่ตัวอักษร AIS (1 = มีตัวอักษร, 0 = ว่าง)
-        // ออกแบบใน Grid 20 คอลัมน์ x 10 แถว
-        const aisPattern = [
-            [0,0,0,0,0, 0,0,0,0,0, 0,0,0,0,0, 0,0,0,0,0], // แถว 0
-            [0,0,1,1,1, 0,0,1,1,1, 0,0,0,1,1, 1,1,1,0,0], // แถว 1 (หัว A, I, S)
-            [0,1,0,0,0, 1,0,0,1,0, 0,0,1,0,0, 0,0,0,1,0], // แถว 2
-            [0,1,0,0,0, 1,0,0,1,0, 0,0,1,0,0, 0,0,0,0,0], // แถว 3
-            [0,1,0,0,0, 1,0,0,1,0, 0,0,0,1,1, 1,1,1,0,0], // แถว 4 (S กลาง)
-            [0,1,1,1,1, 1,0,0,1,0, 0,0,0,0,0, 0,0,0,1,0], // แถว 5 (ขีดกลาง A)
-            [0,1,0,0,0, 1,0,0,1,0, 0,0,0,0,0, 0,0,0,1,0], // แถว 6
-            [0,1,0,0,0, 1,0,0,1,0, 0,0,1,0,0, 0,0,0,1,0], // แถว 7
-            [0,1,0,0,0, 1,0,1,1,1, 0,0,0,1,1, 1,1,1,0,0], // แถว 8 (ฐาน)
-            [0,0,0,0,0, 0,0,0,0,0, 0,0,0,0,0, 0,0,0,0,0], // แถว 9
-        ];
+        // ฟังก์ชันสร้าง Pattern AIS แบบคำนวณพิกัด (เพราะเขียน Array 900 ตัวไม่ไหว)
+        // Grid: x=0-44 (กว้าง), y=0-19 (สูง)
+        function getAISPattern() {
+            const pattern = [];
+            for (let y = 0; y < 20; y++) {
+                const row = [];
+                for (let x = 0; x < 45; x++) {
+                    let isLetter = 0;
 
-        // สร้าง Grid บนหน้าจอ
-        function createGrid() {
-            aisPattern.forEach((row, rowIndex) => {
-                row.forEach((cell, colIndex) => {
-                    const div = document.createElement('div');
-                    div.classList.add('pixel');
-                    
-                    // ถ้าใน Pattern เป็นเลข 1 ให้ถือว่าเป็นส่วนของตัวอักษร
-                    if(cell === 1) {
-                        div.classList.add('active');
-                        activePixels.push(div); // เก็บเข้า List ไว้ใส่รูป
-                    }
-                    container.appendChild(div);
-                });
-            });
-        }
+                    // วาดตัว A (ประมาณ x: 2-12)
+                    if (
+                        (x >= 2 && x <= 4 && y >= 4) || // ขาซ้าย
+                        (x >= 10 && x <= 12 && y >= 4) || // ขาขวา
+                        (x >= 2 && x <= 12 && y >= 0 && y <= 3) || // หัวบน
+                        (x >= 2 && x <= 12 && y >= 9 && y <= 11)   // ขีดกลาง
+                    ) isLetter = 1;
 
-        // ฟังก์ชันเอารูปใส่ลงในช่อง Grid
-        function placeImage(url) {
-            if (activePixels.length === 0) return;
+                    // วาดตัว I (ประมาณ x: 17-23)
+                    if (
+                        (x >= 17 && x <= 23 && y >= 0 && y <= 3) || // ขีดบน
+                        (x >= 19 && x <= 21 && y >= 4 && y <= 15) || // แกนกลาง
+                        (x >= 17 && x <= 23 && y >= 16 && y <= 19)   // ฐานล่าง
+                    ) isLetter = 1;
 
-            // เลือกช่องถัดไป (วนลูปถ้าเต็มแล้ว)
-            const targetPixel = activePixels[currentImageIndex];
-            
-            // สร้าง element รูปภาพ
-            const img = document.createElement('img');
-            img.src = url;
-            
-            // ล้างรูปเก่า (ถ้ามี) แล้วใส่รูปใหม่
-            targetPixel.innerHTML = '';
-            targetPixel.appendChild(img);
-
-            // ขยับ index ไปช่องถัดไป ถ้าเกินจำนวนช่อง ให้กลับไปเริ่ม 0 ใหม่
-            currentImageIndex = (currentImageIndex + 1) % activePixels.length;
-        }
-
-        // เริ่มต้นสร้าง Grid
-        createGrid();
-
-        // Socket Events
-        // 1. โหลดรูปเก่าที่มีอยู่แล้วตอนเปิดหน้าเว็บ
-        socket.on('initImages', (images) => {
-            images.forEach(imgUrl => placeImage(imgUrl));
-        });
-
-        // 2. รับรูปใหม่แบบ Real-time
-        socket.on('newImage', (imgUrl) => {
-            placeImage(imgUrl);
-        });
-
-    </script>
-</body>
-</html>
+                    // วาดตัว S (ประมาณ x: 28-42)
+                    if (
+                        (x >= 28 && x <= 42 && y >= 0 && y <= 3) || // ขีดบน
+                        (x >= 28 && x <= 42 && y >= 8 && y <= 11) || // ขีดกลาง
+                        (x >= 28 && x <= 42 && y >= 16 && y <= 19) || // ขีดล่าง
+                        (x >= 28 && x <= 31 && y >= 4 && y <= 8) ||   // มุมซ้ายบน
+                        (x >=
